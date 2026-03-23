@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>学生签到系统 - 蓝色专业版</title>
+    <!-- 引入 Tailwind CSS (UI框架) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Font Awesome (图标) -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); }
+        .glass-card { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+        .status-btn { transition: all 0.2s; }
+        .active-present { background-color: #10b981 !important; color: white; border-color: #10b981; }
+        .active-absent { background-color: #ef4444 !important; color: white; border-color: #ef4444; }
+        .active-late { background-color: #f59e0b !important; color: white; border-color: #f59e0b; }
+    </style>
+</head>
+<body class="min-h-screen py-8 px-4 flex items-center justify-center">
+
+    <div class="max-w-md w-full glass-card rounded-2xl shadow-2xl overflow-hidden">
+        <!-- 头部 -->
+        <div class="bg-blue-900 p-6 text-white text-center">
+            <h1 class="text-xl font-bold flex items-center justify-center gap-2">
+                <i class="fas fa-clipboard-user"></i> 学生签到系统
+            </h1>
+            <p class="text-blue-200 text-xs mt-1">实时数据同步 · 专业考勤管理</p>
+        </div>
+
+        <!-- 输入区域 -->
+        <div class="p-6 border-b border-gray-100">
+            <div class="mb-4">
+                <label class="block text-gray-700 text-sm font-bold mb-2">学生姓名</label>
+                <input type="text" id="studentName" placeholder="请输入姓名" 
+                    class="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none transition">
+            </div>
+
+            <div class="mb-6">
+                <label class="block text-gray-700 text-sm font-bold mb-2">选择状态</label>
+                <div class="flex gap-2">
+                    <button onclick="selectStatus('出勤', this)" class="status-btn flex-1 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">出勤</button>
+                    <button onclick="selectStatus('缺勤', this)" class="status-btn flex-1 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">缺勤</button>
+                    <button onclick="selectStatus('迟到', this)" class="status-btn flex-1 py-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50">迟到</button>
+                </div>
+            </div>
+
+            <button onclick="handleSave()" 
+                class="w-full bg-blue-700 text-white font-bold py-3 rounded-lg hover:bg-blue-800 shadow-lg active:scale-[0.98] transition">
+                确认签到
+            </button>
+        </div>
+
+        <!-- 列表区域 -->
+        <div class="p-6 bg-gray-50/50">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="font-bold text-gray-800">实时记录</h2>
+                <span id="totalCount" class="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded-full font-bold">0 条记录</span>
+            </div>
+            <div id="attendanceList" class="space-y-3 max-h-80 overflow-y-auto pr-2">
+                <!-- 动态加载内容 -->
+                <p class="text-center text-gray-400 py-10 text-sm">暂无数据</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // --- ⚠️ 注意：在这里填入你的 Firebase 配置 ---
+        const firebaseConfig = {
+             apiKey: "AIzaSyCi8V4pksMP_RBhNis6e0S0DIqi0zDprCM",
+  authDomain: "index1-77d05.firebaseapp.com",
+  projectId: "index1-77d05",
+  storageBucket: "index1-77d05.firebasestorage.app",
+  messagingSenderId: "762512551907",
+  appId: "1:762512551907:web:35ff0529d57acb23477ad6"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const colRef = collection(db, "checkin");
+
+        let currentStatus = '';
+
+        // 状态选择逻辑
+        window.selectStatus = (status, btn) => {
+            currentStatus = status;
+            document.querySelectorAll('.status-btn').forEach(b => b.classList.remove('active-present', 'active-absent', 'active-late'));
+            if(status === '出勤') btn.classList.add('active-present');
+            if(status === '缺勤') btn.classList.add('active-absent');
+            if(status === '迟到') btn.classList.add('active-late');
+        };
+
+        // 提交数据
+        window.handleSave = async () => {
+            const name = document.getElementById('studentName').value.trim();
+            if(!name || !currentStatus) return alert("请完整填写姓名并选择状态");
+
+            try {
+                await addDoc(colRef, {
+                    name: name,
+                    status: currentStatus,
+                    time: serverTimestamp()
+                });
+                document.getElementById('studentName').value = '';
+            } catch (e) { alert("提交失败，请检查配置"); }
+        };
+
+        // 实时渲染
+        const q = query(colRef, orderBy("time", "desc"));
+        onSnapshot(q, (snapshot) => {
+            const list = document.getElementById('attendanceList');
+            document.getElementById('totalCount').innerText = `${snapshot.size} 条记录`;
+            list.innerHTML = '';
+            
+            snapshot.forEach(doc => {
+                const data = doc.data();
+                const timeStr = data.time ? new Date(data.time.seconds * 1000).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '...';
+                const colors = { '出勤': 'text-green-600 bg-green-50', '缺勤': 'text-red-600 bg-red-50', '迟到': 'text-amber-600 bg-amber-50' };
+                
+                list.innerHTML += `
+                    <div class="flex items-center justify-between p-3 bg-white border border-gray-100 rounded-xl shadow-sm">
+                        <div>
+                            <p class="font-bold text-gray-800 text-sm">${data.name}</p>
+                            <p class="text-[10px] text-gray-400">${timeStr}</p>
+                        </div>
+                        <span class="text-xs px-2 py-1 rounded-md font-bold ${colors[data.status]}">${data.status}</span>
+                    </div>
+                `;
+            });
+        });
+    </script>
+</body>
+</html>
